@@ -1,2 +1,12 @@
-# Ignore OS generated files
+# OS files
 .DS_Store
+Thumbs.db
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+
+# PHP / Composer
+vendor/
+composer.lock
