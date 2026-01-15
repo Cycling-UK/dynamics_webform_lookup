@@ -1,0 +1,19 @@
+dynamics_webform_lookup.settings:
+  type: config_object
+  label: 'Dynamics Webform Lookup Settings'
+  mapping:
+    api_secret:
+      type: string
+      label: 'Dynamics API Secret'
+    api_key:
+      type: string
+      label: 'Dynamics API Key'
+    environment:
+      type: string
+      label: 'Active Environment'
+    api_url_dev:
+      type: string
+      label: 'Dev API URL'
+    api_url_prod:
+      type: string
+      label: 'Prod API URL'

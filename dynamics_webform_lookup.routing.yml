@@ -1,0 +1,7 @@
+dynamics_webform_lookup.settings:
+  path: '/admin/config/services/dynamics-lookup'
+  defaults:
+    _form: '\Drupal\dynamics_webform_lookup\Form\SettingsForm'
+    _title: 'Dynamics Webform Lookup Settings'
+  requirements:
+    _permission: 'administer site configuration'

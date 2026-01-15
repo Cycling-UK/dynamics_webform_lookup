@@ -1,0 +1,5 @@
+api_secret: 'N0aZpMWGSawBZ2iPisfU7RWXUk3TA7JvBRxvfdgVGrADduioxTYri9HUrL6Cdgc35HEe0u38sbWunQK1QbyH3gvMuBetxLGChKmZcJuzuQsMzNCc3flJZNFyIld800Bx'
+api_key: 'GSawBZ2iPisfU7RWXUk3TA7JvBRxvfdgVGrADduioxTYri9HUrL6Cdgc35HEe0u38sbWunQK1QbyH3gvMuBetxLGChKmZcJuzuQsMzNCc3flJZNFyIld800BxN0aZpMW'
+environment: 'dev'
+api_url_dev: 'https://0abe4d30ed6e4a199193cf400f5573.7e.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/13377bb523814408a88940d664bfbdbc/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=x-9TJLIXbk6sqc1TRHPlY9_u_Tebvy9wgw8jPBhpxsQ'
+api_url_prod: 'https://f623fcb41efbea4d8f0df822df3ab9.ac.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/1a148258045247918a05d57a8646f4fd/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=imd7C1ARNvIT-fzQ8oASfweCSJiAPgLnjtSCdvsTF6Y'

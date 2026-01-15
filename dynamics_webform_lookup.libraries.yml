@@ -1,0 +1,5 @@
+lookup_logic:
+  version: 1.0
+  dependencies:
+    - core/drupal.ajax
+    - core/jquery

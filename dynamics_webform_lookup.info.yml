@@ -1,0 +1,7 @@
+name: 'Dynamics Webform Lookup'
+type: module
+description: 'Drupal 11 compliant handler to lookup Dynamics data and populate webform fields.'
+package: Custom
+core_version_requirement: ^10 || ^11
+dependencies:
+  - webform:webform
