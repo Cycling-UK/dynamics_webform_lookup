@@ -7,13 +7,12 @@ use Drupal\Core\Ajax\InvokeCommand;
 use Drupal\Core\Ajax\ReplaceCommand;
 use Drupal\Core\Ajax\HtmlCommand;
 use Drupal\Core\Ajax\PrependCommand;
-use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Render\Element;
 use Drupal\webform\Plugin\WebformHandlerBase;
 use Drupal\webform\WebformSubmissionInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-
+use Drupal\key\KeyRepositoryInterface; // Added use statement
 
 /**
  * Webform lookup handler for Dynamics.
@@ -22,7 +21,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * id = "dynamics_lookup",
  * label = @Translation("Dynamics Lookup"),
  * category = @Translation("External Integration"),
- * description = @Translation("Search Dynamics via Power Automate with Private TempStore persistence."),
+ * description = @Translation("Search Dynamics via Power Automate with Key module security."),
  * )
  */
 class DynamicsLookupHandler extends WebformHandlerBase {
@@ -49,6 +48,13 @@ class DynamicsLookupHandler extends WebformHandlerBase {
   protected $configFactory;
 
   /**
+   * The key repository.
+   *
+   * @var \Drupal\key\KeyRepositoryInterface
+   */
+  protected $keyRepository; // Added property
+
+  /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
@@ -56,6 +62,7 @@ class DynamicsLookupHandler extends WebformHandlerBase {
     $instance->httpClient = $container->get('http_client');
     $instance->tempStoreFactory = $container->get('tempstore.private');
     $instance->configFactory = $container->get('config.factory');
+    $instance->keyRepository = $container->get('key.repository'); // Injected service
     return $instance;
   }
 
@@ -109,37 +116,51 @@ class DynamicsLookupHandler extends WebformHandlerBase {
     $response = new AjaxResponse();
     $tempstore = $this->tempStoreFactory->get('dynamics_lookup');
     
-    // Clear old messages from both potential locations
     $response->addCommand(new HtmlCommand('#dynamics-messages-wrapper', ''));
     $response->addCommand(new InvokeCommand('.dynamics-inline-error', 'remove'));
 
     $org_num = trim((string) ($form_state->getValue('lookup_org_num') ?? ''));
     $postcode = trim((string) ($form_state->getValue('lookup_postcode') ?? ''));
 
-    // VALIDATION: Placed at the top of the container
     if (empty($org_num) && empty($postcode)) {
-      $error_html = '<div class="dynamics-inline-error messages messages-lookup-handler">' . 
+      $error_html = '<div class="dynamics-inline-error messages messages--error">' . 
                     $this->t('Please enter either an organisation number or a postcode to search.') . 
                     '</div>';
-      
-      // Prepends the message as the first item inside the lookup container
       $response->addCommand(new PrependCommand('#edit-dynamics-lookup-container', $error_html));
       return $response;
     }
 
     // Load credentials and environment settings from configuration.
     $config = $this->configFactory->get('dynamics_webform_lookup.settings');
-    $secret = $config->get('api_secret') ?? '';
-    $api_key = $config->get('api_key') ?? '';
+
+    // 1. Get the IDs from config
+    $key_id = $config->get('api_key_id');
+    $secret_id = $config->get('api_secret_id');
+
+    // 2. Fetch the Key entities first
+    $key_entity = $key_id ? $this->keyRepository->getKey($key_id) : NULL;
+    $secret_entity = $secret_id ? $this->keyRepository->getKey($secret_id) : NULL;
+
+    // 3. Only call getKeyValue() if the entity actually exists
+    $api_key = $key_entity ? $key_entity->getKeyValue() : '';
+    $secret = $secret_entity ? $secret_entity->getKeyValue() : '';
+
+    // 4. Safety Check: Stop if keys are missing
+    if (empty($api_key) || empty($secret)) {
+      \Drupal::logger('dynamics_debug')->error('Key lookup failed. Check if Key entities "@key" and "@secret" exist.', [
+        '@key' => $key_id,
+        '@secret' => $secret_id,
+      ]);
+      $response->addCommand(new HtmlCommand('#dynamics-messages-wrapper', '<div class="messages messages--error">Security configuration missing. Please check module settings.</div>'));
+      return $response;
+    }
     
-    // Determine which URL to use based on the environment switch.
     $env = $config->get('environment') ?: 'dev';
     $api_url = ($env === 'prod') ? $config->get('api_url_prod') : $config->get('api_url_dev');
 
-    // Safety check: log error and inform user if the URL for the active environment is missing.
     if (empty($api_url)) {
       \Drupal::logger('dynamics_debug')->error('Dynamics Search Error: No API URL configured for @env environment.', ['@env' => $env]);
-      $response->addCommand(new HtmlCommand('#dynamics-messages-wrapper', '<div class="messages messages--error">Configuration error: API URL missing for ' . $env . '.</div>'));
+      $response->addCommand(new HtmlCommand('#dynamics-messages-wrapper', '<div class="messages messages--error">Configuration error: API URL missing.</div>'));
       return $response;
     }
 
@@ -164,7 +185,6 @@ class DynamicsLookupHandler extends WebformHandlerBase {
 
       $items = json_decode($api_res->getBody()->getContents(), TRUE) ?? [];
       
-      // PRODUCTION LOG: Combined environment and search result info into one entry.
       \Drupal::logger('dynamics_debug')->info('Search successful in [@env] environment for "@term". Found @count results.', [
         '@env'  => strtoupper($env), 
         '@term' => !empty($postcode) ? $postcode : $org_num,
@@ -208,7 +228,6 @@ class DynamicsLookupHandler extends WebformHandlerBase {
 
     $record = $results_data[$selected_id];
 
-    // PRODUCTION LOG: Lowered to 'debug' level to avoid bloating production logs.
     \Drupal::logger('dynamics_debug')->debug('Full Dynamics Record: <pre>@data</pre>', [
       '@data' => print_r($record, TRUE),
     ]);
