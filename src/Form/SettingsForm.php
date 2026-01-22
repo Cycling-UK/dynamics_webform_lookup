@@ -30,7 +30,7 @@ class SettingsForm extends ConfigFormBase {
   public function buildForm(array $form, FormStateInterface $form_state) {
     $config = $this->config('dynamics_webform_lookup.settings');
 
-    // 1. Environment Switch (Primary UI)
+    // 1. Environment Switch (Stored in config yml)
     $form['environment'] = [
       '#type' => 'radios',
       '#title' => $this->t('Active Environment'),
@@ -42,7 +42,7 @@ class SettingsForm extends ConfigFormBase {
       '#description' => $this->t('Choose which API URL to use for searches.'),
     ];
 
-    // 2. API URL Fields
+    // 2. API URL Fields (Stored in config yml)
     $form['api_url_dev'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Dev API URL'),
@@ -57,25 +57,24 @@ class SettingsForm extends ConfigFormBase {
       '#maxlength' => 1024,
     ];
 
-    // 3. Sensitive Credentials Protection
-    // This creates a collapsed accordion that must be clicked to open.
+    // 3. Sensitive Credentials (Mapped to Key Module)
     $form['advanced_security'] = [
       '#type' => 'details',
       '#title' => $this->t('Advanced Security (API Credentials)'),
-      '#open' => FALSE, // Keeps it closed by default
-      '#description' => $this->t('Warning: Changing these values will affect the connection to Dynamics.'),
+      '#open' => FALSE,
+      '#description' => $this->t('Select the Keys that bridge to your DDEV/Server environment variables.'),
     ];
 
-    $form['advanced_security']['api_key'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('API Key'),
-      '#default_value' => $config->get('api_key'),
+    $form['advanced_security']['api_key_id'] = [
+      '#type' => 'key_select',
+      '#title' => $this->t('Dynamics API Key'),
+      '#default_value' => $config->get('api_key_id'),
     ];
 
-    $form['advanced_security']['api_secret'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('API Secret'),
-      '#default_value' => $config->get('api_secret'),
+    $form['advanced_security']['api_secret_id'] = [
+      '#type' => 'key_select',
+      '#title' => $this->t('Dynamics API Secret'),
+      '#default_value' => $config->get('api_secret_id'),
     ];
 
     return parent::buildForm($form, $form_state);
@@ -89,8 +88,8 @@ class SettingsForm extends ConfigFormBase {
       ->set('environment', $form_state->getValue('environment'))
       ->set('api_url_dev', $form_state->getValue('api_url_dev'))
       ->set('api_url_prod', $form_state->getValue('api_url_prod'))
-      ->set('api_key', $form_state->getValue('api_key'))
-      ->set('api_secret', $form_state->getValue('api_secret'))
+      ->set('api_key_id', $form_state->getValue('api_key_id'))
+      ->set('api_secret_id', $form_state->getValue('api_secret_id'))
       ->save();
 
     parent::submitForm($form, $form_state);
