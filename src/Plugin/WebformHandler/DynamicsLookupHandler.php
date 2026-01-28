@@ -143,8 +143,8 @@ class DynamicsLookupHandler extends WebformHandlerBase {
 
     // 3. Only call getKeyValue() if the entity actually exists
     // Add trim() here to strip hidden newlines or spaces from the file
-    $api_key = $key_entity ? trim((string) $key_entity->getKeyValue()) : '';
-    $secret = $secret_entity ? trim((string) $secret_entity->getKeyValue()) : '';
+    $api_key = $key_entity ? trim($key_entity->getKeyValue()) : '';
+    $secret = $secret_entity ? trim($secret_entity->getKeyValue()) : '';
 
     // 4. Safety Check: Stop if keys are missing
     if (empty($api_key) || empty($secret)) {
