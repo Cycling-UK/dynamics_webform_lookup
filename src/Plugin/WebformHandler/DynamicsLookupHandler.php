@@ -12,7 +12,7 @@ use Drupal\Core\Render\Element;
 use Drupal\webform\Plugin\WebformHandlerBase;
 use Drupal\webform\WebformSubmissionInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Drupal\key\KeyRepositoryInterface; // Added use statement
+use Drupal\key\KeyRepositoryInterface;
 
 /**
  * Webform lookup handler for Dynamics.
@@ -52,7 +52,7 @@ class DynamicsLookupHandler extends WebformHandlerBase {
    *
    * @var \Drupal\key\KeyRepositoryInterface
    */
-  protected $keyRepository; // Added property
+  protected $keyRepository;
 
   /**
    * {@inheritdoc}
@@ -62,7 +62,7 @@ class DynamicsLookupHandler extends WebformHandlerBase {
     $instance->httpClient = $container->get('http_client');
     $instance->tempStoreFactory = $container->get('tempstore.private');
     $instance->configFactory = $container->get('config.factory');
-    $instance->keyRepository = $container->get('key.repository'); // Injected service
+    $instance->keyRepository = $container->get('key.repository');
     return $instance;
   }
 
@@ -115,38 +115,49 @@ class DynamicsLookupHandler extends WebformHandlerBase {
   public function searchAjaxCallback(array &$form, FormStateInterface $form_state) {
     $response = new AjaxResponse();
     $tempstore = $this->tempStoreFactory->get('dynamics_lookup');
+    $config = $this->configFactory->get('dynamics_webform_lookup.settings');
     
     $response->addCommand(new HtmlCommand('#dynamics-messages-wrapper', ''));
     $response->addCommand(new InvokeCommand('.dynamics-inline-error', 'remove'));
 
-    $org_num = trim((string) ($form_state->getValue('lookup_org_num') ?? ''));
-    $postcode = trim((string) ($form_state->getValue('lookup_postcode') ?? ''));
+    // 1. Detect which fields are present on the form.
+    $has_org_field = $form_state->hasValue('lookup_org_num');
+    $has_postcode_field = $form_state->hasValue('lookup_postcode');
+    $require_both = $config->get('require_both_fields') ?? FALSE;
 
-    if (empty($org_num) && empty($postcode)) {
-      $error_html = '<div class="dynamics-inline-error messages messages--error">' . 
-                    $this->t('Please enter either an organisation number or a postcode to search.') . 
-                    '</div>';
+    $org_num = $has_org_field ? trim((string) $form_state->getValue('lookup_org_num')) : '';
+    $postcode = $has_postcode_field ? trim((string) $form_state->getValue('lookup_postcode')) : '';
+
+    // 2. Conditional Validation Logic.
+    $errors = [];
+    if ($has_org_field && $has_postcode_field) {
+      if ($require_both && (empty($org_num) || empty($postcode))) {
+        $errors[] = $this->t('Both Organisation Number and Postcode are required for this search.');
+      } elseif (empty($org_num) && empty($postcode)) {
+        $errors[] = $this->t('Please enter either an organisation number or a postcode to search.');
+      }
+    } elseif ($has_postcode_field && empty($postcode)) {
+      $errors[] = $this->t('Please enter a postcode to search.');
+    } elseif ($has_org_field && empty($org_num)) {
+      $errors[] = $this->t('Please enter an organisation number to search.');
+    } elseif (!$has_org_field && !$has_postcode_field) {
+      $errors[] = $this->t('Configuration error: No search fields found on this form.');
+    }
+
+    if (!empty($errors)) {
+      $error_html = '<div class="dynamics-inline-error messages messages--error">' . implode(' ', $errors) . '</div>';
       $response->addCommand(new PrependCommand('#edit-dynamics-lookup-container', $error_html));
       return $response;
     }
 
-    // Load credentials and environment settings from configuration.
-    $config = $this->configFactory->get('dynamics_webform_lookup.settings');
-
-    // 1. Get the IDs from config
+    // 3. Credential Retrieval.
     $key_id = $config->get('api_key_id');
     $secret_id = $config->get('api_secret_id');
-
-    // 2. Fetch the Key entities first
     $key_entity = $key_id ? $this->keyRepository->getKey($key_id) : NULL;
     $secret_entity = $secret_id ? $this->keyRepository->getKey($secret_id) : NULL;
-
-    // 3. Only call getKeyValue() if the entity actually exists
-    // Add trim() here to strip hidden newlines or spaces from the file
     $api_key = $key_entity ? trim($key_entity->getKeyValue()) : '';
     $secret = $secret_entity ? trim($secret_entity->getKeyValue()) : '';
 
-    // 4. Safety Check: Stop if keys are missing
     if (empty($api_key) || empty($secret)) {
       \Drupal::logger('dynamics_debug')->error('Key lookup failed. Check if Key entities "@key" and "@secret" exist.', [
         '@key' => $key_id,
@@ -160,17 +171,21 @@ class DynamicsLookupHandler extends WebformHandlerBase {
     $api_url = ($env === 'prod') ? $config->get('api_url_prod') : $config->get('api_url_dev');
 
     if (empty($api_url)) {
-      \Drupal::logger('dynamics_debug')->error('Dynamics Search Error: No API URL configured for @env environment.', ['@env' => $env]);
       $response->addCommand(new HtmlCommand('#dynamics-messages-wrapper', '<div class="messages messages--error">Configuration error: API URL missing.</div>'));
       return $response;
     }
 
+    // 4. API Payload Construction.
     $payload = [
       'application_secret' => $secret,
       'search_term' => !empty($postcode) ? strtoupper($postcode) : strtoupper($org_num),
-      'cuk_registrationnumber' => strtoupper($org_num),
-      'address1_postalcode' => strtoupper($postcode),
     ];
+    if ($has_org_field) {
+      $payload['cuk_registrationnumber'] = strtoupper($org_num);
+    }
+    if ($has_postcode_field) {
+      $payload['address1_postalcode'] = strtoupper($postcode);
+    }
 
     try {
       $api_res = $this->httpClient->post($api_url, [
@@ -185,13 +200,6 @@ class DynamicsLookupHandler extends WebformHandlerBase {
       ]);
 
       $items = json_decode($api_res->getBody()->getContents(), TRUE) ?? [];
-      
-      \Drupal::logger('dynamics_debug')->info('Search successful in [@env] environment for "@term". Found @count results.', [
-        '@env'  => strtoupper($env), 
-        '@term' => !empty($postcode) ? $postcode : $org_num,
-        '@count' => count($items),
-      ]);
-
       $options = ['' => $this->t('- Select Result (@count found) -', ['@count' => count($items)])];
       $results_data = [];
 
@@ -228,11 +236,6 @@ class DynamicsLookupHandler extends WebformHandlerBase {
     }
 
     $record = $results_data[$selected_id];
-
-    \Drupal::logger('dynamics_debug')->debug('Full Dynamics Record: <pre>@data</pre>', [
-      '@data' => print_r($record, TRUE),
-    ]);
-    
     $mapping = [
       'business_name'                => $record['name'] ?? '',
       'business_registered_name'     => $record['cuk_registeredname'] ?? $record['name'] ?? '',
