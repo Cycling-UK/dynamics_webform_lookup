@@ -1,5 +1,5 @@
 {
-    "name": "cycling-uk/dynamics_webform_lookup",
+    "name": "cycling_uk/dynamics_webform_lookup",
     "description": "Drupal 11 handler to lookup Dynamics data and populate webform fields.",
     "type": "drupal-custom-module",
     "license": "GPL-2.0-or-later",
